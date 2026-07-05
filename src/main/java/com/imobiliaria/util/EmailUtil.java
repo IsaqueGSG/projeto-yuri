@@ -8,6 +8,7 @@ import java.util.Properties;
 public class EmailUtil {
     private static final String HOST = "sandbox.smtp.mailtrap.io";
     private static final String PORT = "2525";
+    
     private static final String USERNAME = "f92759b82b653b"; 
     private static final String PASSWORD = "f6c461163a5527";
 
@@ -42,9 +43,8 @@ public class EmailUtil {
 
         Transport.send(message);
     }
-    
+
     public static void enviarEmailResetSenha(String emailDestino, String token) {
-        // Como configuramos o Context Root para /, o link fica direto e limpo!
         String linkReset = "http://localhost:8080/redefinir-senha?token=" + token;
 
         String assunto = "Recuperação de Senha - Sistema Imobiliária";
@@ -53,27 +53,29 @@ public class EmailUtil {
                 + "<p><a href='" + linkReset + "'>Clique aqui para redefinir sua senha</a></p>"
                 + "<br><p>Se você não solicitou esta alteração, ignore este e-mail. O link expira em 15 minutos.</p>";
 
-        // Código de envio do Jakarta Mail (Mesma estrutura do Mailtrap)
-        java.util.Properties props = new java.util.Properties();
+        Properties props = new Properties();
+        // A LINHA props.build(); FOI REMOVIDA DAQUI
         props.put("mail.smtp.auth", "true");
         props.put("mail.smtp.starttls.enable", "true");
-        props.put("mail.smtp.host", "sandbox.smtp.mailtrap.io");
-        props.put("mail.smtp.port", "2525");
+        props.put("mail.smtp.host", HOST);
+        props.put("mail.smtp.port", PORT);
+        props.put("mail.smtp.ssl.trust", HOST);
 
-        jakarta.mail.Session session = jakarta.mail.Session.getInstance(props, new jakarta.mail.Authenticator() {
-            protected jakarta.mail.PasswordAuthentication getPasswordAuthentication() {
-                return new jakarta.mail.PasswordAuthentication(USERNAME, PASSWORD); // Usa suas constantes do Mailtrap
+        Session session = Session.getInstance(props, new Authenticator() {
+            @Override
+            protected PasswordAuthentication getPasswordAuthentication() {
+                return new PasswordAuthentication(USERNAME, PASSWORD);
             }
         });
 
         try {
-            jakarta.mail.Message message = new jakarta.mail.MimeMessage(session);
-            message.setFrom(new jakarta.mail.InternetAddress("no-reply@imobiliaria.com"));
-            message.setRecipients(jakarta.mail.Message.RecipientType.TO, jakarta.mail.InternetAddress.parse(emailDestino));
+            Message message = new MimeMessage(session);
+            message.setFrom(new InternetAddress("no-reply@imobiliaria.com"));
+            message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(emailDestino));
             message.setSubject(assunto);
             message.setContent(conteudo, "text/html; charset=UTF-8");
-            jakarta.mail.Transport.send(message);
-        } catch (jakarta.mail.MessagingException e) {
+            Transport.send(message);
+        } catch (MessagingException e) {
             throw new RuntimeException("Erro ao enviar e-mail de redefinição", e);
         }
     }
