@@ -18,7 +18,7 @@
 <div class="container">
     <div class="row">
         <div class="col-md-4 mb-4">
-            <div class="card shadow-sm border-0">
+            <div class="card shadow-sm border-0 sticky-top" style="top: 20px;">
                 <div class="card-body">
                     <h4 class="mb-4">Novo Imóvel</h4>
                     <div id="alerta-imovel" class="alert d-none p-2 small"></div>
@@ -50,7 +50,7 @@
         </div>
 
         <div class="col-md-8">
-            <div class="card shadow-sm border-0 p-4">
+            <div class="card shadow-sm border-0 p-4 mb-4">
                 <h4 class="mb-4">Solicitações de Visitas Agendadas</h4>
                 <div class="table-responsive">
                     <table class="table table-striped table-hover align-middle small">
@@ -66,6 +66,23 @@
                     </table>
                 </div>
             </div>
+
+            <div class="card shadow-sm border-0 p-4">
+                <h4 class="mb-4">Imóveis sob Gestão</h4>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover align-middle small">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="width: 70px;">Miniatura</th>
+                                <th>Título do Imóvel</th>
+                                <th>Preço de Venda</th>
+                                <th style="width: 120px;">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-imoveis"></tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -73,6 +90,7 @@
 <script>
 document.addEventListener("DOMContentLoaded", () => {
     carregarVisitas();
+    carregarImoveis(); // Inicializa a lista de imóveis assim que a página abre
 });
 
 function carregarVisitas() {
@@ -92,6 +110,41 @@ function carregarVisitas() {
                         <td>\${v.usuarioNome}</td>
                         <td>\${v.dataVisita.replace("T", " ")}</td>
                         <td><span class="badge bg-warning text-dark">\${v.status}</span></td>
+                    </tr>
+                `;
+            });
+        });
+}
+
+function carregarImoveis() {
+    fetch("api/imoveis")
+        .then(res => res.json())
+        .then(imoveis => {
+            const tbody = document.getElementById("tabela-imoveis");
+            tbody.innerHTML = "";
+            if(imoveis.length === 0) {
+                tbody.innerHTML = "<tr><td colspan='4' class='text-center text-muted'>Nenhum imóvel sob gestão no momento.</td></tr>";
+                return;
+            }
+            imoveis.forEach(i => {
+                const precoFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(i.preco);
+                
+                // Define uma cor inteligente para o badge dependendo do status do imóvel
+                let badgeClass = "bg-success";
+                if(i.status === "VENDIDO") badgeClass = "bg-danger";
+                if(i.status === "ALUGADO") badgeClass = "bg-info text-dark";
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td>
+                            <img src="\${i.imagemUrl}" alt="Imóvel" style="width: 60px; height: 45px; object-fit: cover; border-radius: 4px; border: 1px solid #dee2e6;">
+                        </td>
+                        <td>
+                            <div class="fw-bold">\${i.titulo}</div>
+                            <small class="text-muted">\${i.endereco}</small>
+                        </td>
+                        <td class="text-primary fw-bold">\${precoFormatado}</td>
+                        <td><span class="badge \${badgeClass}">\${i.status}</span></td>
                     </tr>
                 `;
             });
@@ -122,6 +175,7 @@ document.getElementById("form-imovel").addEventListener("submit", (e) => {
         alerta.classList.remove("d-none");
         if(dados.sucesso) {
             document.getElementById("form-imovel").reset();
+            carregarImoveis(); // <- REATIVIDADE: Atualiza a lista na hora sem dar F5!
         }
     });
 });
