@@ -1,129 +1,162 @@
 package com.imobiliaria.servlet;
 
-import com.google.gson.Gson;
-import com.imobiliaria.dto.ImovelDTO;
-import com.imobiliaria.util.ConexaoDB;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.sql.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @WebServlet("/api/imoveis")
 public class ImovelServlet extends HttpServlet {
+
+    private Connection getConnection() throws Exception {
+        Class.forName("com.mysql.cj.jdbc.Driver");
+        return java.sql.DriverManager.getConnection("jdbc:mysql://localhost:3306/imobiliaria_db", "root", "");
+    }
+
+    // LISTAR IMÓVEIS (GET) - CORRIGIDO COM LOCALE US
     @Override
-    protected void doGet(HttpServletRequest request, HttpServletResponse response) 
-            throws ServletException, IOException {
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
         PrintWriter out = response.getWriter();
-        Gson gson = new Gson();
 
-        String idParam = request.getParameter("id");
+        StringBuilder json = new StringBuilder("[");
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement("SELECT * FROM imoveis ORDER BY id DESC");
+             ResultSet rs = ps.executeQuery()) {
 
-        try (Connection conn = ConexaoDB.getConnection()) {
-            if (idParam != null && !idParam.trim().isEmpty()) {
-                int id = Integer.parseInt(idParam);
-                String sql = "SELECT * FROM imoveis WHERE id = ?";
-                try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                    stmt.setInt(1, id);
-                    try (ResultSet rs = stmt.executeQuery()) {
-                        if (rs.next()) {
-                            ImovelDTO imovel = new ImovelDTO();
-                            imovel.setId(rs.getInt("id"));
-                            imovel.setTitulo(rs.getString("titulo"));
-                            imovel.setDescricao(rs.getString("descricao"));
-                            imovel.setPreco(rs.getBigDecimal("preco"));
-                            imovel.setEndereco(rs.getString("endereco"));
-                            imovel.setImagemUrl(rs.getString("imagem_url"));
-                            imovel.setStatus(rs.getString("status"));
-                            out.print(gson.toJson(imovel));
-                        } else {
-                            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-                            Map<String, String> err = new HashMap<>();
-                            err.put("erro", "Imóvel não localizado.");
-                            out.print(gson.toJson(err));
-                        }
-                    }
-                }
-            } else {
-                List<ImovelDTO> lista = new ArrayList<>();
-                String sql = "SELECT * FROM imoveis ORDER BY id DESC";
-                try (PreparedStatement stmt = conn.prepareStatement(sql);
-                     ResultSet rs = stmt.executeQuery()) {
-                    while (rs.next()) {
-                        ImovelDTO imovel = new ImovelDTO();
-                        imovel.setId(rs.getInt("id"));
-                        imovel.setTitulo(rs.getString("titulo"));
-                        imovel.setDescricao(rs.getString("descricao"));
-                        imovel.setPreco(rs.getBigDecimal("preco"));
-                        imovel.setEndereco(rs.getString("endereco"));
-                        imovel.setImagemUrl(rs.getString("imagem_url"));
-                        imovel.setStatus(rs.getString("status"));
-                        lista.add(imovel);
-                    }
-                }
-                out.print(gson.toJson(lista));
+            while (rs.next()) {
+                // Forçamos o java.util.Locale.US para que o preço use PONTO (.) e não VÍRGULA (,)
+                json.append(String.format(java.util.Locale.US,
+                    "{\"id\":%d,\"titulo\":\"%s\",\"endereco\":\"%s\",\"preco\":%.2f,\"imagemUrl\":\"%s\",\"descricao\":\"%s\",\"status\":\"%s\"},",
+                    rs.getInt("id"),
+                    rs.getString("titulo").replace("\"", "\\\""),
+                    rs.getString("endereco").replace("\"", "\\\""),
+                    rs.getDouble("preco"),
+                    rs.getString("imagem_url").replace("\"", "\\\""),
+                    // Tratamos quebras de linha que também invalidam o JSON (\r e \n)
+                    rs.getString("descricao").replace("\"", "\\\"").replace("\r", "").replace("\n", "\\n"),
+                    rs.getString("status")
+                ));
+            }
+            if (json.length() > 1) json.setLength(json.length() - 1); // Remove a última vírgula
+            json.append("]");
+            out.print(json.toString());
+        } catch (Exception e) {
+            out.print("[]");
+        }
+    }
+    
+    // CADASTRAR IMÓVEL (POST)
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        PrintWriter out = response.getWriter();
+
+        try {
+            String body = lerCorpoRequisicao(request);
+            String titulo = extrairCampoJson(body, "titulo");
+            String endereco = extrairCampoJson(body, "endereco");
+            double preco = Double.parseDouble(extrairCampoJson(body, "preco"));
+            String imagemUrl = extrairCampoJson(body, "imagemUrl");
+            String descricao = extrairCampoJson(body, "descricao");
+
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(
+                     "INSERT INTO imoveis (titulo, endereco, preco, imagem_url, descricao, status) VALUES (?, ?, ?, ?, ?, 'DISPONÍVEL')")) {
+                ps.setString(1, titulo);
+                ps.setString(2, endereco);
+                ps.setDouble(3, preco);
+                ps.setString(4, imagemUrl);
+                ps.setString(5, descricao);
+                ps.executeUpdate();
+                out.print("{\"sucesso\": true, \"mensagem\": \"Imóvel cadastrado com sucesso!\"}");
             }
         } catch (Exception e) {
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            Map<String, String> err = new HashMap<>();
-            err.put("erro", e.getMessage());
-            out.print(gson.toJson(err));
+            out.print("{\"sucesso\": false, \"mensagem\": \"Erro ao salvar: " + e.getMessage() + "\"}");
         }
     }
 
+    // EDITAR IMÓVEL (PUT)
     @Override
-    protected void doPost(HttpServletRequest request, HttpServletResponse response) 
-            throws ServletException, IOException {
+    protected void doPut(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
         PrintWriter out = response.getWriter();
-        Gson gson = new Gson();
-        Map<String, Object> resposta = new HashMap<>();
-
-        HttpSession session = request.getSession(false);
-        if (session == null || !"GESTOR".equals(session.getAttribute("usuarioRole"))) {
-            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-            resposta.put("sucesso", false);
-            resposta.put("mensagem", "Acesso não autorizado.");
-            out.print(gson.toJson(resposta));
-            return;
-        }
 
         try {
-            BufferedReader reader = request.getReader();
-            ImovelDTO imovel = gson.fromJson(reader, ImovelDTO.class);
+            String body = lerCorpoRequisicao(request);
+            int id = Integer.parseInt(extrairCampoJson(body, "id"));
+            String titulo = extrairCampoJson(body, "titulo");
+            String endereco = extrairCampoJson(body, "endereco");
+            double preco = Double.parseDouble(extrairCampoJson(body, "preco"));
+            String imagemUrl = extrairCampoJson(body, "imagemUrl");
+            String descricao = extrairCampoJson(body, "descricao");
 
-            try (Connection conn = ConexaoDB.getConnection()) {
-                String sql = "INSERT INTO imoveis (titulo, descricao, preco, endereco, imagem_url, status) VALUES (?, ?, ?, ?, ?, 'DISPONIVEL')";
-                try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                    stmt.setString(1, imovel.getTitulo());
-                    stmt.setString(2, imovel.getDescricao());
-                    stmt.setBigDecimal(3, imovel.getPreco());
-                    stmt.setString(4, imovel.getEndereco());
-                    stmt.setString(5, imovel.getImagemUrl());
-                    stmt.executeUpdate();
+            try (Connection conn = getConnection();
+                 PreparedStatement ps = conn.prepareStatement(
+                     "UPDATE imoveis SET titulo=?, endereco=?, preco=?, imagem_url=?, descricao=? WHERE id=?")) {
+                ps.setString(1, titulo);
+                ps.setString(2, endereco);
+                ps.setDouble(3, preco);
+                ps.setString(4, imagemUrl);
+                ps.setString(5, descricao);
+                ps.setInt(6, id);
+                ps.executeUpdate();
+                out.print("{\"sucesso\": true, \"mensagem\": \"Imóvel atualizado com sucesso!\"}");
+            }
+        } catch (Exception e) {
+            out.print("{\"sucesso\": false, \"mensagem\": \"Erro ao atualizar: " + e.getMessage() + "\"}");
+        }
+    }
+
+    // EXCLUIR IMÓVEL (DELETE)
+    @Override
+    protected void doDelete(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        PrintWriter out = response.getWriter();
+
+        try {
+            String idParam = request.getParameter("id");
+            if (idParam != null) {
+                try (Connection conn = getConnection();
+                     PreparedStatement ps = conn.prepareStatement("DELETE FROM imoveis WHERE id=?")) {
+                    ps.setInt(1, Integer.parseInt(idParam));
+                    ps.executeUpdate();
+                    out.print("{\"sucesso\": true, \"mensagem\": \"Imóvel removido do banco!\"}");
                 }
             }
-
-            response.setStatus(HttpServletResponse.SC_CREATED);
-            resposta.put("sucesso", true);
-            resposta.put("mensagem", "Imóvel cadastrado com sucesso.");
         } catch (Exception e) {
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            resposta.put("sucesso", false);
-            resposta.put("mensagem", "Erro no servidor: " + e.getMessage());
+            out.print("{\"sucesso\": false, \"mensagem\": \"Erro ao excluir: " + e.getMessage() + "\"}");
         }
-        out.print(gson.toJson(resposta));
+    }
+
+    // Métodos Utilitários nativos para processar JSON
+    private String lerCorpoRequisicao(HttpServletRequest request) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader reader = request.getReader()) {
+            String linha;
+            while ((linha = reader.readLine()) != null) sb.append(linha);
+        }
+        return sb.toString();
+    }
+
+    private String extrairCampoJson(String json, String campo) {
+        Pattern pattern = Pattern.compile("\"" + campo + "\":\\s*\"?(.*?)\"?([,}]|$)");
+        Matcher matcher = pattern.matcher(json);
+        if (matcher.find()) {
+            return matcher.group(1).replaceAll("^\"|\"$", "").trim();
+        }
+        return "";
     }
 }

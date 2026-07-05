@@ -17,12 +17,16 @@
 
 <div class="container">
     <div class="row">
+        <!-- Coluna Esquerda: Cadastro/Edição de Imóveis -->
         <div class="col-md-4 mb-4">
             <div class="card shadow-sm border-0 sticky-top" style="top: 20px;">
                 <div class="card-body">
-                    <h4 class="mb-4">Novo Imóvel</h4>
+                    <h4 id="titulo-form" class="mb-4">Novo Imóvel</h4>
                     <div id="alerta-imovel" class="alert d-none p-2 small"></div>
+                    
                     <form id="form-imovel">
+                        <input type="hidden" id="imovel-id" value="">
+                        
                         <div class="mb-2">
                             <label class="form-label small">Título do Imóvel</label>
                             <input type="text" id="titulo" class="form-control form-control-sm" required>
@@ -43,13 +47,17 @@
                             <label class="form-label small">Descrição Detalhada</label>
                             <textarea id="descricao" class="form-control form-control-sm" rows="3" required></textarea>
                         </div>
-                        <button type="submit" class="btn btn-primary btn-sm w-100">Cadastrar Imóvel</button>
+                        
+                        <button type="submit" id="btn-submit-imovel" class="btn btn-primary btn-sm w-100">Cadastrar Imóvel</button>
+                        <button type="button" id="btn-cancelar-edicao" class="btn btn-secondary btn-sm w-100 mt-2 d-none" onclick="cancelarEdicao()">Cancelar Edição</button>
                     </form>
                 </div>
             </div>
         </div>
 
+        <!-- Coluna Direita: Listagens -->
         <div class="col-md-8">
+            <!-- Tabela de Solicitações de Visitas -->
             <div class="card shadow-sm border-0 p-4 mb-4">
                 <h4 class="mb-4">Solicitações de Visitas Agendadas</h4>
                 <div class="table-responsive">
@@ -60,6 +68,7 @@
                                 <th>Interessado</th>
                                 <th>Data e Horário</th>
                                 <th>Status</th>
+                                <th style="width: 110px;">Ações</th>
                             </tr>
                         </thead>
                         <tbody id="tabela-visitas"></tbody>
@@ -67,6 +76,7 @@
                 </div>
             </div>
 
+            <!-- Tabela de Imóveis Cadastrados -->
             <div class="card shadow-sm border-0 p-4">
                 <h4 class="mb-4">Imóveis sob Gestão</h4>
                 <div class="table-responsive">
@@ -76,7 +86,8 @@
                                 <th style="width: 70px;">Miniatura</th>
                                 <th>Título do Imóvel</th>
                                 <th>Preço de Venda</th>
-                                <th style="width: 120px;">Status</th>
+                                <th>Status</th>
+                                <th style="width: 140px;">Ações</th>
                             </tr>
                         </thead>
                         <tbody id="tabela-imoveis"></tbody>
@@ -87,10 +98,13 @@
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
 document.addEventListener("DOMContentLoaded", () => {
     carregarVisitas();
-    carregarImoveis(); // Inicializa a lista de imóveis assim que a página abre
+    carregarImoveis();
+    configurarGatilhoEdicao();
 });
 
 function carregarVisitas() {
@@ -100,16 +114,33 @@ function carregarVisitas() {
             const tbody = document.getElementById("tabela-visitas");
             tbody.innerHTML = "";
             if(visitas.length === 0) {
-                tbody.innerHTML = "<tr><td colspan='4' class='text-center text-muted'>Nenhuma solicitação até o momento.</td></tr>";
+                tbody.innerHTML = "<tr><td colspan='5' class='text-center text-muted'>Nenhuma solicitação até o momento.</td></tr>";
                 return;
             }
             visitas.forEach(v => {
+                let badgeClass = "bg-warning text-dark";
+                if(v.status === "CONFIRMADA") badgeClass = "bg-success";
+                if(v.status === "CANCELADA") badgeClass = "bg-danger";
+
                 tbody.innerHTML += `
                     <tr>
                         <td class="fw-bold">\${v.imovelTitulo}</td>
                         <td>\${v.usuarioNome}</td>
-                        <td>\${v.dataVisita.replace("T", " ")}</td>
-                        <td><span class="badge bg-warning text-dark">\${v.status}</span></td>
+                        <td>\${v.dataVisita}</td>
+                        <td><span class="badge \${badgeClass}">\${v.status}</span></td>
+                        <td>
+                            <div class="dropdown">
+                                <button class="btn btn-light btn-sm dropdown-toggle border" type="button" data-bs-toggle="dropdown">
+                                    Gerenciar
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end small">
+                                    <li><a class="dropdown-item text-success fw-semibold" href="#" onclick="alterarStatusVisita('\${v.id}', 'CONFIRMADA'); return false;">✓ Confirmar</a></li>
+                                    <li><a class="dropdown-item text-danger fw-semibold" href="#" onclick="alterarStatusVisita('\${v.id}', 'CANCELADA'); return false;">✗ Cancelar</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item text-muted" href="#" onclick="excluirVisita('\${v.id}'); return false;">Remover Registro</a></li>
+                                </ul>
+                            </div>
+                        </td>
                     </tr>
                 `;
             });
@@ -123,37 +154,69 @@ function carregarImoveis() {
             const tbody = document.getElementById("tabela-imoveis");
             tbody.innerHTML = "";
             if(imoveis.length === 0) {
-                tbody.innerHTML = "<tr><td colspan='4' class='text-center text-muted'>Nenhum imóvel sob gestão no momento.</td></tr>";
+                tbody.innerHTML = "<tr><td colspan='5' class='text-center text-muted'>Nenhum imóvel cadastrado.</td></tr>";
                 return;
             }
             imoveis.forEach(i => {
                 const precoFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(i.preco);
-                
-                // Define uma cor inteligente para o badge dependendo do status do imóvel
                 let badgeClass = "bg-success";
                 if(i.status === "VENDIDO") badgeClass = "bg-danger";
-                if(i.status === "ALUGADO") badgeClass = "bg-info text-dark";
 
                 tbody.innerHTML += `
                     <tr>
-                        <td>
-                            <img src="\${i.imagemUrl}" alt="Imóvel" style="width: 60px; height: 45px; object-fit: cover; border-radius: 4px; border: 1px solid #dee2e6;">
-                        </td>
+                        <td><img src="\${i.imagemUrl}" style="width:60px; height:45px; object-fit:cover; border-radius:4px;"></td>
                         <td>
                             <div class="fw-bold">\${i.titulo}</div>
                             <small class="text-muted">\${i.endereco}</small>
                         </td>
                         <td class="text-primary fw-bold">\${precoFormatado}</td>
                         <td><span class="badge \${badgeClass}">\${i.status}</span></td>
+                        <td>
+                            <div class="d-flex gap-1">
+                                <button class="btn btn-sm btn-outline-warning btn-editar-imovel" 
+                                    data-id="\${i.id}" data-titulo="\${i.titulo}" data-endereco="\${i.endereco}" 
+                                    data-preco="\${i.preco}" data-imagem="\${i.imagemUrl}" data-descricao="\${i.descricao}">
+                                    Editar
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="excluirImovel('\${i.id}')">Excluir</button>
+                            </div>
+                        </td>
                     </tr>
                 `;
             });
         });
 }
 
+function configurarGatilhoEdicao() {
+    document.getElementById("tabela-imoveis").addEventListener("click", (e) => {
+        if(e.target.classList.contains("btn-editar-imovel")) {
+            const btn = e.target;
+            document.getElementById("imovel-id").value = btn.dataset.id;
+            document.getElementById("titulo").value = btn.dataset.titulo;
+            document.getElementById("endereco").value = btn.dataset.endereco;
+            document.getElementById("preco").value = btn.dataset.preco;
+            document.getElementById("imagem_url").value = btn.dataset.imagem;
+            document.getElementById("descricao").value = btn.dataset.descricao;
+
+            document.getElementById("titulo-form").textContent = "Editar Imóvel";
+            document.getElementById("btn-submit-imovel").textContent = "Salvar Alterações";
+            document.getElementById("btn-cancelar-edicao").classList.remove("d-none");
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    });
+}
+
+function cancelarEdicao() {
+    document.getElementById("form-imovel").reset();
+    document.getElementById("imovel-id").value = "";
+    document.getElementById("titulo-form").textContent = "Novo Imóvel";
+    document.getElementById("btn-submit-imovel").textContent = "Cadastrar Imóvel";
+    document.getElementById("btn-cancelar-edicao").classList.add("d-none");
+}
+
 document.getElementById("form-imovel").addEventListener("submit", (e) => {
     e.preventDefault();
-    const alerta = document.getElementById("alerta-imovel");
+    const idExistente = document.getElementById("imovel-id").value;
     
     const payload = {
         titulo: document.getElementById("titulo").value,
@@ -163,22 +226,50 @@ document.getElementById("form-imovel").addEventListener("submit", (e) => {
         descricao: document.getElementById("descricao").value
     };
 
+    const metodo = idExistente ? "PUT" : "POST";
+    if (idExistente) payload.id = idExistente;
+
     fetch("api/imoveis", {
-        method: "POST",
+        method: metodo,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
     })
     .then(res => res.json())
     .then(dados => {
+        const alerta = document.getElementById("alerta-imovel");
         alerta.className = "alert " + (dados.sucesso ? "alert-success" : "alert-danger");
         alerta.textContent = dados.mensagem;
         alerta.classList.remove("d-none");
         if(dados.sucesso) {
-            document.getElementById("form-imovel").reset();
-            carregarImoveis(); // <- REATIVIDADE: Atualiza a lista na hora sem dar F5!
+            cancelarEdicao();
+            carregarImoveis();
         }
     });
 });
+
+function excluirImovel(id) {
+    if(confirm("Excluir este imóvel permanentemente do banco?")) {
+        fetch(`api/imoveis?id=\${id}`, { method: "DELETE" })
+        .then(res => res.json())
+        .then(() => carregarImoveis());
+    }
+}
+
+function alterarStatusVisita(id, novoStatus) {
+    fetch("api/visitas", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: parseInt(id), status: novoStatus })
+    })
+    .then(() => carregarVisitas());
+}
+
+function excluirVisita(id) {
+    if(confirm("Remover este agendamento permanentemente?")) {
+        fetch(`api/visitas?id=\${id}`, { method: "DELETE" })
+        .then(() => carregarVisitas());
+    }
+}
 </script>
 </body>
 </html>
