@@ -27,6 +27,9 @@
                         </div>
                         <button type="submit" class="btn btn-dark w-100">Entrar</button>
                     </form>
+                      <div class="text-center mt-3">
+                        <a href="esqueci-senha.jsp">Esqueci minha senha</a>
+                    </div>
                     <div class="text-center mt-3">
                         <a href="cadastro.jsp" class="text-decoration-none">Não tem conta? Cadastre-se</a>
                     </div>
