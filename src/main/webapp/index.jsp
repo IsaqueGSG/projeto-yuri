@@ -14,11 +14,15 @@
         <div class="collapse navbar-collapse justify-content-end">
             <!-- Correção da classe de alinhamento do Bootstrap -->
             <ul class="navbar-nav align-items-center">
-                <% if(session.getAttribute("usuarioNome") != null) { %>
-                    <li class="nav-item"><span class="nav-link text-white me-3">Olá, <strong><%= session.getAttribute("usuarioNome") %></strong></span></li>
-                    <% if("GESTOR".equals(session.getAttribute("usuarioRole"))) { %>
-                        <li class="nav-item"><a class="btn btn-warning btn-sm me-2 fw-semibold" href="dashboard.jsp">Painel Gestor</a></li>
-                    <% } %>
+				<% if(session.getAttribute("usuarioNome") != null) { %>
+				    <li class="nav-item"><span class="nav-link text-white me-3">Olá, <strong><%= session.getAttribute("usuarioNome") %></strong></span></li>
+				    
+				    <!-- ADICIONE ESTA LINHA AQUI -->
+				    <li class="nav-item"><a class="btn btn-outline-info btn-sm me-2 text-white" href="cliente.jsp">Meus Agendamentos</a></li>
+				
+				    <% if("GESTOR".equals(session.getAttribute("usuarioRole"))) { %>
+				        <li class="nav-item"><a class="btn btn-warning btn-sm me-2 fw-semibold" href="dashboard.jsp">Painel Gestor</a></li>
+				    <% } %>
                     <li class="nav-item"><a class="btn btn-outline-danger btn-sm" href="logout">Sair</a></li>
                 <% } else { %>
                     <li class="nav-item"><a class="btn btn-outline-light btn-sm me-2" href="login.jsp">Login</a></li>

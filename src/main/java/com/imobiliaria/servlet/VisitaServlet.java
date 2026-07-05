@@ -21,42 +21,69 @@ public class VisitaServlet extends HttpServlet {
         return java.sql.DriverManager.getConnection("jdbc:mysql://localhost:3306/imobiliaria_db", "root", "");
     }
 
-    // LISTAR TODAS AS VISITAS COM SOLICITANTES (GET)
+   // LISTAR VISITAS - ADAPTADO DE FORMA SEGURA PARA GESTOR VS CLIENTE
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
         PrintWriter out = response.getWriter();
 
-        StringBuilder json = new StringBuilder("[");
+        // Pega os dados de quem está fazendo a requisição direto da sessão protegida do Tomcat
+        Object usuarioIdObj = request.getSession().getAttribute("usuarioId");
+        Object usuarioRoleObj = request.getSession().getAttribute("usuarioRole");
+
+        if (usuarioIdObj == null) {
+            out.print("[]");
+            return;
+        }
+
+        int usuarioId = Integer.parseInt(usuarioIdObj.toString());
+        boolean ehGestor = "GESTOR".equals(usuarioRoleObj);
+
+        // Base da query SQL
         String sql = "SELECT v.id, i.titulo AS imovelTitulo, u.nome AS usuarioNome, v.data_visita, v.status " +
                      "FROM visitas v " +
                      "INNER JOIN imoveis i ON v.imovel_id = i.id " +
-                     "INNER JOIN usuarios u ON v.usuario_id = u.id " +
-                     "ORDER BY v.data_visita ASC";
+                     "INNER JOIN usuarios u ON v.usuario_id = u.id ";
 
+        // SE NÃO FOR GESTOR, injeta o filtro WHERE para isolar estritamente os dados do próprio cliente
+        if (!ehGestor) {
+            sql += "WHERE v.usuario_id = ? ";
+        }
+        
+        sql += "ORDER BY v.data_visita DESC";
+
+        StringBuilder json = new StringBuilder("[");
         try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
+             PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            while (rs.next()) {
-                json.append(String.format(
-                    "{\"id\":%d,\"imovelTitulo\":\"%s\",\"usuarioNome\":\"%s\",\"dataVisita\":\"%s\",\"status\":\"%s\"},",
-                    rs.getInt("id"),
-                    rs.getString("imovelTitulo").replace("\"", "\\\""),
-                    rs.getString("usuarioNome").replace("\"", "\\\""),
-                    rs.getTimestamp("data_visita").toString().substring(0, 16),
-                    rs.getString("status")
-                ));
+            // Se for cliente comum, preenche o parâmetro do '?' seguro
+            if (!ehGestor) {
+                ps.setInt(1, usuarioId);
             }
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    json.append(String.format(
+                        "{\"id\":%d,\"imovelTitulo\":\"%s\",\"usuarioNome\":\"%s\",\"dataVisita\":\"%s\",\"status\":\"%s\"},",
+                        rs.getInt("id"),
+                        rs.getString("imovelTitulo").replace("\"", "\\\""),
+                        rs.getString("usuarioNome").replace("\"", "\\\""),
+                        rs.getTimestamp("data_visita").toString().substring(0, 16),
+                        rs.getString("status")
+                    ));
+                }
+            }
+            
             if (json.length() > 1) json.setLength(json.length() - 1);
             json.append("]");
             out.print(json.toString());
+            
         } catch (Exception e) {
             out.print("[]");
         }
     }
-
+    
     // NOVO: SOLICITAR AGENDAMENTO DE VISITA (POST)
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
