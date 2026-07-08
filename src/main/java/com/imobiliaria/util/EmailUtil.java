@@ -32,7 +32,7 @@ public class EmailUtil {
         message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(destinatario));
         message.setSubject("Ativação de Conta - Sistema de Imobiliária");
 
-        String linkAtivacao = "http://localhost:8080/verificar-email?token=" + token;
+        String linkAtivacao = "http://localhost:8080/ROOT/verificar-email?token=" + token;
         
         String corpoHtml = "<h1>Bem-vindo à nossa Imobiliária!</h1>"
                 + "<p>Para confirmar seu cadastro e ativar sua conta, clique no link abaixo:</p>"
@@ -45,7 +45,7 @@ public class EmailUtil {
     }
 
     public static void enviarEmailResetSenha(String emailDestino, String token) {
-        String linkReset = "http://localhost:8080/redefinir-senha?token=" + token;
+        String linkReset = "http://localhost:8080/ROOT/redefinir-senha?token=" + token;
 
         String assunto = "Recuperação de Senha - Sistema Imobiliária";
         String conteudo = "<h3>Redefinição de Senha</h3>"
